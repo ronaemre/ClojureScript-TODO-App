@@ -2,7 +2,8 @@
   (:require [reagent.core :as r] 
             [reagent.dom :as rdom]
             [clojure.string :as str]
-            [cljs.pprint :as pp]))
+            [cljs.pprint :as pp]
+            [cljs.reader :as reader]))
 
 
 
@@ -11,19 +12,40 @@
 
 (defonce todos (r/atom (sorted-map)))
 
-(defonce counter (r/atom 0))
+
+
+
+;;--- Local Storage ----
+
+(def local-store-key "todo-app")
+
+(defn todos->local-store []
+(.setItem js/localStorage local-store-key (str @todos)))
+
+(defn local-store->todos []
+   (let [edn-map-todos (.getItem js/localStorage local-store-key)
+   unsorted-todos (some->> edn-map-todos reader/read-string)
+   sorted-todos (into (sorted-map) unsorted-todos)]
+   (reset! todos sorted-todos)))
+
+   
 
 ;;--- Watch the State ----
 
 (add-watch todos :todos
     (fn[key _atom _old-state new-state]
+    (todos->local-store)
     (println "---" key "atom changed ---")
     (pp/pprint new-state)))
 
 ;;--- Utilities ----
 
+(defn allocate-next-id [todos]
+      ((fnil inc 0) (last (keys todos))))
+
+
 (defn add-todo [text]
-  (let [id (swap! counter inc)
+  (let [id (allocate-next-id @todos)
   new-todo {:id id, :title text, :done false }]
   (swap! todos assoc id new-todo)))
 
@@ -41,7 +63,7 @@
 
 ;;--- Initialize App with sample Data ----
 
-(defonce init (do
+#_(defonce init (do
       (add-todo "Do laundry")
        (add-todo "Learn Clojure")
         (add-todo "Buy book")))
@@ -128,6 +150,7 @@
   (rdom/render [todo-app] (.getElementById js/document "root")))
 
 (defn ^:export main []
+(local-store->todos)
   (render))
 
 (defn ^:dev/after-load reload! []
